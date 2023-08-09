@@ -1,0 +1,25 @@
+{
+  "name": "supplychain",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "lint": "eslint . --ext .ts",
+    "prepare": "npm run build",
+    "pretest": "npm run lint",
+    "start": "node dist/app.js"
+  },
+  "engineStrict": true,
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tsconfig/node14": "^14.1.0",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@hyperledger/fabric-gateway": "^1.3.0"
+  }
+}
