@@ -5,8 +5,8 @@
  * whether a transaction should be retried.
  */
 
-import { TimeoutError, TransactionError } from 'fabric-network'
-import { logger } from './logger'
+import { TimeoutError, TransactionError } from 'fabric-network';
+import { logger } from './logger';
 
 /**
  * Base type for errors from the smart contract.
@@ -14,14 +14,14 @@ import { logger } from './logger'
  * These errors will not be retried.
  */
 export class ContractError extends Error {
-  transactionId: string
+  transactionId: string;
 
   constructor(message: string, transactionId: string) {
-    super(message)
-    Object.setPrototypeOf(this, ContractError.prototype)
+    super(message);
+    Object.setPrototypeOf(this, ContractError.prototype);
 
-    this.name = 'TransactionError'
-    this.transactionId = transactionId
+    this.name = 'TransactionError';
+    this.transactionId = transactionId;
   }
 }
 
@@ -31,10 +31,10 @@ export class ContractError extends Error {
  */
 export class TransactionNotFoundError extends ContractError {
   constructor(message: string, transactionId: string) {
-    super(message, transactionId)
-    Object.setPrototypeOf(this, TransactionNotFoundError.prototype)
+    super(message, transactionId);
+    Object.setPrototypeOf(this, TransactionNotFoundError.prototype);
 
-    this.name = 'TransactionNotFoundError'
+    this.name = 'TransactionNotFoundError';
   }
 }
 
@@ -44,10 +44,10 @@ export class TransactionNotFoundError extends ContractError {
  */
 export class CheeseExistsError extends ContractError {
   constructor(message: string, transactionId: string) {
-    super(message, transactionId)
-    Object.setPrototypeOf(this, CheeseExistsError.prototype)
+    super(message, transactionId);
+    Object.setPrototypeOf(this, CheeseExistsError.prototype);
 
-    this.name = 'CheeseExistsError'
+    this.name = 'CheeseExistsError';
   }
 }
 
@@ -57,10 +57,10 @@ export class CheeseExistsError extends ContractError {
  */
 export class CheeseNotFoundError extends ContractError {
   constructor(message: string, transactionId: string) {
-    super(message, transactionId)
-    Object.setPrototypeOf(this, CheeseNotFoundError.prototype)
+    super(message, transactionId);
+    Object.setPrototypeOf(this, CheeseNotFoundError.prototype);
 
-    this.name = 'CheeseNotFoundError'
+    this.name = 'CheeseNotFoundError';
   }
 }
 
@@ -104,13 +104,13 @@ export enum RetryAction {
  */
 export const getRetryAction = (err: unknown): RetryAction => {
   if (isDuplicateTransactionError(err) || err instanceof ContractError) {
-    return RetryAction.None
+    return RetryAction.None;
   } else if (err instanceof TimeoutError) {
-    return RetryAction.WithExistingTransactionId
+    return RetryAction.WithExistingTransactionId;
   }
 
-  return RetryAction.WithNewTransactionId
-}
+  return RetryAction.WithNewTransactionId;
+};
 
 /**
  * Type guard to make catching unknown errors easier
@@ -123,8 +123,8 @@ export const isErrorLike = (err: unknown): err is Error => {
     typeof (err as Error).message === 'string' &&
     ((err as Error).stack === undefined ||
       typeof (err as Error).stack === 'string')
-  )
-}
+  );
+};
 
 /**
  * Checks whether an error was caused by a duplicate transaction.
@@ -132,31 +132,32 @@ export const isErrorLike = (err: unknown): err is Error => {
  * This is ...painful.
  */
 export const isDuplicateTransactionError = (err: unknown): boolean => {
-  logger.debug({ err }, 'Checking for duplicate transaction error')
+  logger.debug({ err }, 'Checking for duplicate transaction error');
 
-  if (err === undefined || err === null) return false
+  if (err === undefined || err === null) return false;
 
-  let isDuplicate
+  let isDuplicate;
   if (typeof (err as TransactionError).transactionCode === 'string') {
     // Checking whether a commit failure is caused by a duplicate transaction
     // is straightforward because the transaction code should be available
-    isDuplicate = (err as TransactionError).transactionCode === 'DUPLICATE_TXID'
+    isDuplicate =
+      (err as TransactionError).transactionCode === 'DUPLICATE_TXID';
   } else {
     // Checking whether an endorsement failure is caused by a duplicate
     // transaction is only possible by processing error strings, which is not ideal.
     const endorsementError = err as {
-      errors: { endorsements: { details: string }[] }[]
-    }
+      errors: { endorsements: { details: string }[] }[];
+    };
 
-    isDuplicate = endorsementError?.errors?.some((err) =>
-      err?.endorsements?.some((endorsement) =>
+    isDuplicate = endorsementError?.errors?.some(err =>
+      err?.endorsements?.some(endorsement =>
         endorsement?.details?.startsWith('duplicate transaction found')
       )
-    )
+    );
   }
 
-  return isDuplicate === true
-}
+  return isDuplicate === true;
+};
 
 /**
  * Matches asset already exists error strings from the asset contract
@@ -167,19 +168,19 @@ export const isDuplicateTransactionError = (err: unknown): boolean => {
  *   - "Asset %s already exists"
  */
 const matchCheeseAlreadyExistsMessage = (message: string): string | null => {
-  const cheeseAlreadyExistsRegex = /([tT]he )?[aA]sset \w* already exists/g
-  const cheeseAlreadyExistsMatch = message.match(cheeseAlreadyExistsRegex)
+  const cheeseAlreadyExistsRegex = /([tT]he )?[aA]sset \w* already exists/g;
+  const cheeseAlreadyExistsMatch = message.match(cheeseAlreadyExistsRegex);
   logger.debug(
     { message: message, result: cheeseAlreadyExistsMatch },
     'Checking for cheese already exists message'
-  )
+  );
 
   if (cheeseAlreadyExistsMatch !== null) {
-    return cheeseAlreadyExistsMatch[0]
+    return cheeseAlreadyExistsMatch[0];
   }
 
-  return null
-}
+  return null;
+};
 
 /**
  * Matches asset does not exist error strings from the asset contract
@@ -190,19 +191,19 @@ const matchCheeseAlreadyExistsMessage = (message: string): string | null => {
  *   - "Asset %s does not exist"
  */
 const matchCheeseDoesNotExistMessage = (message: string): string | null => {
-  const cheeseDoesNotExistRegex = /([tT]he )?[cC]heese \w* does not exist/g
-  const cheeseDoesNotExistMatch = message.match(cheeseDoesNotExistRegex)
+  const cheeseDoesNotExistRegex = /([tT]he )?[cC]heese \w* does not exist/g;
+  const cheeseDoesNotExistMatch = message.match(cheeseDoesNotExistRegex);
   logger.debug(
     { message: message, result: cheeseDoesNotExistMatch },
     'Checking for cheese does not exist message'
-  )
+  );
 
   if (cheeseDoesNotExistMatch !== null) {
-    return cheeseDoesNotExistMatch[0]
+    return cheeseDoesNotExistMatch[0];
   }
 
-  return null
-}
+  return null;
+};
 
 /**
  * Matches transaction does not exist error strings from the contract API
@@ -215,21 +216,21 @@ const matchTransactionDoesNotExistMessage = (
   message: string
 ): string | null => {
   const transactionDoesNotExistRegex =
-    /Failed to get transaction with id [^,]*, error (?:(?:Entry not found)|(?:no such transaction ID \[[^\]]*\])) in index/g
+    /Failed to get transaction with id [^,]*, error (?:(?:Entry not found)|(?:no such transaction ID \[[^\]]*\])) in index/g;
   const transactionDoesNotExistMatch = message.match(
     transactionDoesNotExistRegex
-  )
+  );
   logger.debug(
     { message: message, result: transactionDoesNotExistMatch },
     'Checking for transaction does not exist message'
-  )
+  );
 
   if (transactionDoesNotExistMatch !== null) {
-    return transactionDoesNotExistMatch[0]
+    return transactionDoesNotExistMatch[0];
   }
 
-  return null
-}
+  return null;
+};
 
 /**
  * Handles errors from evaluating and submitting transactions.
@@ -244,31 +245,31 @@ export const handleError = (
   transactionId: string,
   err: unknown
 ): Error | unknown => {
-  logger.debug({ transactionId: transactionId, err }, 'Processing error')
+  logger.debug({ transactionId: transactionId, err }, 'Processing error');
 
   if (isErrorLike(err)) {
     const cheeseAlreadyExistsMatch = matchCheeseAlreadyExistsMessage(
       err.message
-    )
+    );
     if (cheeseAlreadyExistsMatch !== null) {
-      return new CheeseExistsError(cheeseAlreadyExistsMatch, transactionId)
+      return new CheeseExistsError(cheeseAlreadyExistsMatch, transactionId);
     }
 
-    const cheeseDoesNotExistMatch = matchCheeseDoesNotExistMessage(err.message)
+    const cheeseDoesNotExistMatch = matchCheeseDoesNotExistMessage(err.message);
     if (cheeseDoesNotExistMatch !== null) {
-      return new CheeseNotFoundError(cheeseDoesNotExistMatch, transactionId)
+      return new CheeseNotFoundError(cheeseDoesNotExistMatch, transactionId);
     }
 
     const transactionDoesNotExistMatch = matchTransactionDoesNotExistMessage(
       err.message
-    )
+    );
     if (transactionDoesNotExistMatch !== null) {
       return new TransactionNotFoundError(
         transactionDoesNotExistMatch,
         transactionId
-      )
+      );
     }
   }
 
-  return err
-}
+  return err;
+};

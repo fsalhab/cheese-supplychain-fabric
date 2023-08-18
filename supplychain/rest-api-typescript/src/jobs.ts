@@ -5,43 +5,43 @@
  * retry support for failing jobs
  */
 
-import { ConnectionOptions, Job, Queue, QueueScheduler, Worker } from 'bullmq'
-import { Application } from 'express'
-import { Contract, Transaction } from 'fabric-network'
-import * as config from './config'
-import { getRetryAction, RetryAction } from './errors'
-import { submitTransaction } from './fabric'
-import { logger } from './logger'
+import { ConnectionOptions, Job, Queue, QueueScheduler, Worker } from "bullmq";
+import { Application } from "express";
+import { Contract, Transaction } from "fabric-network";
+import * as config from "./config";
+import { getRetryAction, RetryAction } from "./errors";
+import { submitTransaction } from "./fabric";
+import { logger } from "./logger";
 
 export type JobData = {
-  mspid: string
-  transactionName: string
-  transactionArgs: string[]
-  transactionState?: Buffer
-  transactionIds: string[]
-}
+  mspid: string;
+  transactionName: string;
+  transactionArgs: string[];
+  transactionState?: Buffer;
+  transactionIds: string[];
+};
 
 export type JobResult = {
-  transactionPayload?: Buffer
-  transactionError?: string
-}
+  transactionPayload?: Buffer;
+  transactionError?: string;
+};
 
 export type JobSummary = {
-  jobId: string
-  transactionIds: string[]
-  transactionPayload?: string
-  transactionError?: string
-}
+  jobId: string;
+  transactionIds: string[];
+  transactionPayload?: string;
+  transactionError?: string;
+};
 
 export class JobNotFoundError extends Error {
-  jobId: string
+  jobId: string;
 
   constructor(message: string, jobId: string) {
-    super(message)
-    Object.setPrototypeOf(this, JobNotFoundError.prototype)
+    super(message);
+    Object.setPrototypeOf(this, JobNotFoundError.prototype);
 
-    this.name = 'JobNotFoundError'
-    this.jobId = jobId
+    this.name = "JobNotFoundError";
+    this.jobId = jobId;
   }
 }
 
@@ -50,7 +50,7 @@ const connection: ConnectionOptions = {
   host: config.redisHost,
   username: config.redisUsername,
   password: config.redisPassword,
-}
+};
 
 /**
  * Set up the queue for submit jobs
@@ -67,10 +67,10 @@ export const initJobQueue = (): Queue => {
       removeOnComplete: config.maxCompletedSubmitJobs,
       removeOnFail: config.maxFailedSubmitJobs,
     },
-  })
+  });
 
-  return submitQueue
-}
+  return submitQueue;
+};
 
 /**
  * Set up a worker to process submit jobs on the queue, using the
@@ -80,29 +80,29 @@ export const initJobQueueWorker = (app: Application): Worker => {
   const worker = new Worker<JobData, JobResult>(
     config.JOB_QUEUE_NAME,
     async (job): Promise<JobResult> => {
-      return await processSubmitTransactionJob(app, job)
+      return await processSubmitTransactionJob(app, job);
     },
     { connection, concurrency: config.submitJobConcurrency }
-  )
+  );
 
-  worker.on('failed', (job) => {
-    logger.warn({ job }, 'Job failed')
-  })
+  worker.on("failed", (job) => {
+    logger.warn({ job }, "Job failed");
+  });
 
   // Important: need to handle this error otherwise worker may stop
   // processing jobs
-  worker.on('error', (err) => {
-    logger.error({ err }, 'Worker error')
-  })
+  worker.on("error", (err) => {
+    logger.error({ err }, "Worker error");
+  });
 
-  if (logger.isLevelEnabled('debug')) {
-    worker.on('completed', (job) => {
-      logger.debug({ job }, 'Job completed')
-    })
+  if (logger.isLevelEnabled("debug")) {
+    worker.on("completed", (job) => {
+      logger.debug({ job }, "Job completed");
+    });
   }
 
-  return worker
-}
+  return worker;
+};
 
 /**
  * Process a submit transaction request from the job queue
@@ -113,50 +113,50 @@ export const processSubmitTransactionJob = async (
   app: Application,
   job: Job<JobData, JobResult>
 ): Promise<JobResult> => {
-  logger.debug({ jobId: job.id, jobName: job.name }, 'Processing job')
+  logger.debug({ jobId: job.id, jobName: job.name }, "Processing job");
 
-  const contract = app.locals[job.data.mspid]?.assetContract as Contract
+  const contract = app.locals[job.data.mspid]?.assetContract as Contract;
   if (contract === undefined) {
     logger.error(
       { jobId: job.id, jobName: job.name },
-      'Contract not found for MSP ID %s',
+      "Contract not found for MSP ID %s",
       job.data.mspid
-    )
+    );
 
     // Retrying will never work without a contract, so give up with an
     // empty job result
     return {
       transactionError: undefined,
       transactionPayload: undefined,
-    }
+    };
   }
 
-  const args = job.data.transactionArgs
-  let transaction: Transaction
+  const args = job.data.transactionArgs;
+  let transaction: Transaction;
 
   if (job.data.transactionState) {
-    const savedState = job.data.transactionState
+    const savedState = job.data.transactionState;
     logger.debug(
       {
         jobId: job.id,
         jobName: job.name,
         savedState,
       },
-      'Reusing previously saved transaction state'
-    )
+      "Reusing previously saved transaction state"
+    );
 
-    transaction = contract.deserializeTransaction(savedState)
+    transaction = contract.deserializeTransaction(savedState);
   } else {
     logger.debug(
       {
         jobId: job.id,
         jobName: job.name,
       },
-      'Using new transaction'
-    )
+      "Using new transaction"
+    );
 
-    transaction = contract.createTransaction(job.data.transactionName)
-    await updateJobData(job, transaction)
+    transaction = contract.createTransaction(job.data.transactionName);
+    await updateJobData(job, transaction);
   }
 
   logger.debug(
@@ -165,49 +165,49 @@ export const processSubmitTransactionJob = async (
       jobName: job.name,
       transactionId: transaction.getTransactionId(),
     },
-    'Submitting transaction'
-  )
+    "Submitting transaction"
+  );
 
   try {
-    const payload = await submitTransaction(transaction, ...args)
+    const payload = await submitTransaction(transaction, ...args);
 
     return {
       transactionError: undefined,
       transactionPayload: payload,
-    }
+    };
   } catch (err) {
-    const retryAction = getRetryAction(err)
+    const retryAction = getRetryAction(err);
 
     if (retryAction === RetryAction.None) {
       logger.error(
         { jobId: job.id, jobName: job.name, err },
-        'Fatal transaction error occurred'
-      )
+        "Fatal transaction error occurred"
+      );
 
       // Not retriable so return a job result with the error details
       return {
         transactionError: `${err}`,
         transactionPayload: undefined,
-      }
+      };
     }
 
     logger.warn(
       { jobId: job.id, jobName: job.name, err },
-      'Retryable transaction error occurred'
-    )
+      "Retryable transaction error occurred"
+    );
 
     if (retryAction === RetryAction.WithNewTransactionId) {
       logger.debug(
         { jobId: job.id, jobName: job.name },
-        'Clearing saved transaction state'
-      )
-      await updateJobData(job, undefined)
+        "Clearing saved transaction state"
+      );
+      await updateJobData(job, undefined);
     }
 
     // Rethrow the error to keep retrying
-    throw err
+    throw err;
   }
-}
+};
 
 /**
  * Set up a scheduler for the submit job queue
@@ -217,14 +217,14 @@ export const processSubmitTransactionJob = async (
 export const initJobQueueScheduler = (): QueueScheduler => {
   const queueScheduler = new QueueScheduler(config.JOB_QUEUE_NAME, {
     connection,
-  })
+  });
 
-  queueScheduler.on('failed', (jobId, failedReason) => {
-    logger.error({ jobId, failedReason }, 'Queue sceduler failure')
-  })
+  queueScheduler.on("failed", (jobId, failedReason) => {
+    logger.error({ jobId, failedReason }, "Queue sceduler failure");
+  });
 
-  return queueScheduler
-}
+  return queueScheduler;
+};
 
 /**
  * Helper to add a new submit transaction job to the queue
@@ -235,20 +235,20 @@ export const addSubmitTransactionJob = async (
   transactionName: string,
   ...transactionArgs: string[]
 ): Promise<string> => {
-  const jobName = `submit ${transactionName} transaction`
+  const jobName = `submit ${transactionName} transaction`;
   const job = await submitQueue.add(jobName, {
     mspid,
     transactionName,
     transactionArgs: transactionArgs,
     transactionIds: [],
-  })
+  });
 
   if (job?.id === undefined) {
-    throw new Error('Submit transaction job ID not available')
+    throw new Error("Submit transaction job ID not available");
   }
 
-  return job.id
-}
+  return job.id;
+};
 
 /**
  * Helper to update the data for an existing job
@@ -257,22 +257,22 @@ export const updateJobData = async (
   job: Job<JobData, JobResult>,
   transaction: Transaction | undefined
 ): Promise<void> => {
-  const newData = { ...job.data }
+  const newData = { ...job.data };
 
   if (transaction != undefined) {
     const transationIds = ([] as string[]).concat(
       newData.transactionIds,
       transaction.getTransactionId()
-    )
-    newData.transactionIds = transationIds
+    );
+    newData.transactionIds = transationIds;
 
-    newData.transactionState = transaction.serialize()
+    newData.transactionState = transaction.serialize();
   } else {
-    newData.transactionState = undefined
+    newData.transactionState = undefined;
   }
 
-  await job.update(newData)
-}
+  await job.update(newData);
+};
 
 /**
  * Gets a job summary
@@ -283,35 +283,35 @@ export const getJobSummary = async (
   queue: Queue,
   jobId: string
 ): Promise<JobSummary> => {
-  const job: Job<JobData, JobResult> | undefined = await queue.getJob(jobId)
-  logger.debug({ job }, 'Got job')
+  const job: Job<JobData, JobResult> | undefined = await queue.getJob(jobId);
+  logger.debug({ job }, "Got job");
 
   if (!(job && job.id != undefined)) {
-    throw new JobNotFoundError(`Job ${jobId} not found`, jobId)
+    throw new JobNotFoundError(`Job ${jobId} not found`, jobId);
   }
 
-  let transactionIds: string[]
+  let transactionIds: string[];
   if (job.data && job.data.transactionIds) {
-    transactionIds = job.data.transactionIds
+    transactionIds = job.data.transactionIds;
   } else {
-    transactionIds = []
+    transactionIds = [];
   }
 
-  let transactionError
-  let transactionPayload
-  const returnValue = job.returnvalue
+  let transactionError;
+  let transactionPayload;
+  const returnValue = job.returnvalue;
   if (returnValue) {
     if (returnValue.transactionError) {
-      transactionError = returnValue.transactionError
+      transactionError = returnValue.transactionError;
     }
 
     if (
       returnValue.transactionPayload &&
       returnValue.transactionPayload.length > 0
     ) {
-      transactionPayload = returnValue.transactionPayload.toString()
+      transactionPayload = returnValue.transactionPayload.toString();
     } else {
-      transactionPayload = ''
+      transactionPayload = "";
     }
   }
 
@@ -320,10 +320,10 @@ export const getJobSummary = async (
     transactionIds,
     transactionError,
     transactionPayload,
-  }
+  };
 
-  return jobSummary
-}
+  return jobSummary;
+};
 
 /**
  * Get the current job counts
@@ -334,13 +334,13 @@ export const getJobCounts = async (
   queue: Queue
 ): Promise<{ [index: string]: number }> => {
   const jobCounts = await queue.getJobCounts(
-    'active',
-    'completed',
-    'delayed',
-    'failed',
-    'waiting'
-  )
-  logger.debug({ jobCounts }, 'Current job counts')
+    "active",
+    "completed",
+    "delayed",
+    "failed",
+    "waiting"
+  );
+  logger.debug({ jobCounts }, "Current job counts");
 
-  return jobCounts
-}
+  return jobCounts;
+};
